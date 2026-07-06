@@ -1,25 +1,30 @@
-# AirGrab
+# AirGrab 🌌🖐️
 
-Uma alternativa de código aberto, leve e universal ao sistema de transferência de arquivos por gestos do **Huawei/HarmonyOS Share**. Transfira arquivos entre computadores na mesma rede local de forma mágica, usando apenas a sua webcam e gestos simples de mão.
+Uma alternativa de código aberto, leve e universal ao sistema de transferência de arquivos por gestos do **Huawei/HarmonyOS Share**. Transfira arquivos entre computadores na mesma rede local de forma mágica, usando apenas a sua webcam, área de transferência (Clipboard) e gestos de mão futuristas.
 
 ---
 
-## Recursos
+## ✨ Recursos
 
 - **Conexão Direta P2P (Local)**: Descoberta automática de computadores na rede via **UDP Broadcast** e transferências rápidas via sockets **TCP**. Sem servidores em nuvem, totalmente privado.
-- **Gestos Inteligentes (Baseados em Transições de Estado)**:
-  - **Agarrar (Origem)**: Abra a mão e feche o punho para selecionar o arquivo que deseja enviar.
-  - **Soltar (Destino)**: Apresente o punho fechado no outro computador e abra a mão para puxar e salvar o arquivo.
-  - **Cancelar (Origem)**: Faça o gesto de "V" (Paz e Amor) para abortar e limpar o arquivo da memória.
-- **Menu Integrado na Bandeja (System Tray)**: Controle as funções de Câmera, Compartilhamento e Modo Debug de forma discreta pelo ícone do sistema.
-- **Feedback Visual (Modo Debug)**: Tela interativa em tempo real com overlay do esqueleto da mão, gestos identificados e o arquivo em trânsito.
-- **Download Automático**: Baixa o modelo leve do **MediaPipe Hand Landmarker** (`hand_landmarker.task`) automaticamente no primeiro início.
+- **Integração Inteligente com Clipboard**:
+  - Em vez de abrir janelas de arquivos nativas e estáticas, o app monitora a área de transferência do seu sistema operacional.
+  - Para transferir, basta selecionar o arquivo e pressionar **Ctrl+C** (ou comando Copiar do OS). O AirGrab faz o resto.
+- **Gestos de Transição de Estado**:
+  - **Agarrar (Origem)**: Comece com a **Mão Aberta** e **Feche o Punho** na frente da câmera para puxar e prender o arquivo copiado.
+  - **Soltar (Destino)**: Apresente o **Punho Fechado** e **Abra a Mão** na frente da câmera do computador receptor para receber o arquivo.
+  - **Cancelar (Origem)**: Faça o gesto de **"V" (Peace/Paz)** para esvaziar o cache e liberar o arquivo da memória.
+- **Interface Flutuante HUD Animada (Pygame)**:
+  - Exibe um painel translúcido em estilo **Glassmorphism** flutuando sobre o desktop do Windows (via transparência nativa `ctypes`).
+  - Animação líquida fluida de ondas de água (Ripples) e emissores de partículas quando ações são efetuadas.
+  - Carrega e exibe miniaturas (previews) reais para imagens ou ícones de documentos estilizados.
+- **Multiplataforma**: Projetado para rodar nativamente no Windows, Linux (via `xclip`) e macOS (via `osascript`).
 
 ---
 
-## Como Funciona?
+## 🛠️ Como Funciona?
 
-O projeto utiliza uma arquitetura modularizada e limpa dividida em threads para não congelar a interface ou a câmera:
+O projeto utiliza uma arquitetura modularizada dividida em threads e subprocessos leves:
 
 ```mermaid
 graph TD
@@ -37,27 +42,33 @@ graph TD
     
     network --> config
     network --> utils[teleport/utils.py]
+    network --> overlay[teleport/overlay.py]
+    
+    vision --> clipboard[teleport/clipboard.py]
+    vision --> overlay
 ```
 
-1. **`config.py`**: Gerencia o estado e as variáveis globais.
-2. **`network.py`**: Cuida do servidor TCP receptor (porta `50001`) e da descoberta UDP (porta `50000`).
-3. **`gui.py`**: Mantém a bandeja do sistema (`pystray`) e abre a janela do seletor de arquivos.
-4. **`vision.py`**: Processa a webcam com OpenCV e MediaPipe para ler as coordenadas da mão e processar transições geométricas invariantes.
+1. **`config.py`**: Estado global centralizado.
+2. **`clipboard.py`**: Acessa a API do Clipboard para ler dados de arquivos copiados (`CF_HDROP` no Windows, `text/uri-list` no Linux, `furl` no macOS).
+3. **`overlay.py`**: Laço gráfico em Pygame que cria as janelas de HUD transparentes.
+4. **`network.py`**: Comunicação de rede (Sockets UDP na porta `50000` e TCP na porta `50001`).
+5. **`vision.py`**: Detector MediaPipe Hand Landmarker com inteligência de gestos e ratios geométricos invariantes de escala.
 
 ---
 
-## Requisitos e Instalação
+## 🚀 Instalação e Execução
 
 ### Pré-requisitos
 - Python 3.8 ou superior instalado.
 - Uma webcam conectada.
-- Computadores conectados à **mesma rede local (Wi-Fi ou Ethernet)**.
+- Computadores na **mesma rede local (Wi-Fi ou Ethernet)**.
+- *Apenas no Linux*: Certifique-se de que o utilitário `xclip` está instalado (`sudo apt install xclip`).
 
 ### Instalação
 1. Clone este repositório:
    ```bash
-   git clone https://github.com/seu-usuario/ai-teleport.git
-   cd ai-teleport
+   git clone https://github.com/seu-usuario/airgrab.git
+   cd airgrab
    ```
 
 2. Instale as dependências necessárias:
@@ -72,37 +83,37 @@ graph TD
 
 ---
 
-## Como Usar
+## 🎮 Como Usar
 
-### 1. Preparando a Transferência (Computador de Origem)
-- Fique de frente para a webcam.
-- Mostre a **Mão Aberta** para a câmera.
-- **Feche o Punho**.
-- Uma janela de arquivos do sistema será aberta. Escolha o arquivo desejado.
-- O arquivo agora está em cache na rede aguardando ser puxado (você pode soltar a mão).
+### 1. Copie e Agarre (Computador de Origem)
+1. Vá até o arquivo que deseja transferir, clique nele e pressione **Ctrl+C** (ou Copiar).
+2. Fique de frente para a webcam de origem.
+3. Mostre a **Mão Aberta** e em seguida **Feche o Punho**.
+4. A tela piscará uma onda verde com o aviso **`AirGrabbed!`**, exibindo o preview e nome do arquivo.
+5. O arquivo agora está em cache na rede (você já pode soltar a mão).
 
-### 2. Resgatando o Arquivo (Computador de Destino)
-- Vá até o computador de destino que também esteja rodando o app.
-- Mostre o **Punho Fechado** para a webcam.
-- **Abra a Mão completamente**.
-- O arquivo será transferido via rede e salvo na pasta raiz com o prefixo `RECEBIDO_`.
+### 2. Resgate e Solte (Computador de Destino)
+1. Vá ao computador receptor.
+2. Mostre o **Punho Fechado** e em seguida **Abra a Mão**.
+3. A tela do computador receptor exibirá uma onda azul com o aviso **`AirDropped!`** e a miniatura do arquivo recebido.
+4. O arquivo estará salvo na pasta raiz com o prefixo `RECEBIDO_`.
 
 ### 3. Cancelando a Transferência
-- Se você selecionou o arquivo errado, faça o **Gesto de Paz / V** (dedos Indicador e Médio esticados, Ring e Pinky dobrados) na frente da webcam de origem.
-- O arquivo será liberado da memória instantaneamente. Alternativamente, você pode usar a opção **"Soltar Arquivo (...)"** no ícone de bandeja do Windows.
+- Caso queira cancelar antes do resgate, faça o gesto de **"V"** (Peace/Paz) na frente da webcam de origem.
+- Uma onda vermelha indicará que o arquivo foi limpo da memória. Alternativamente, você pode clicar com o botão direito no ícone da bandeja e escolher **"Soltar Arquivo (...)"**.
 
 ---
 
-## Compilando para Executável (.exe no Windows)
+## 📦 Compilando para Executável (.exe no Windows)
 
-Caso queira gerar um executável independente que não necessite do Python instalado para rodar nas máquinas, use o **PyInstaller** com as configurações do arquivo `.spec` já fornecido:
+Caso queira gerar o arquivo compilado sem necessidade do Python instalado, execute:
 
 1. Instale o PyInstaller:
    ```bash
    pip install pyinstaller
    ```
 
-2. Compile usando o arquivo `.spec`:
+2. Compile o spec pré-configurado:
    ```bash
    pyinstaller teleport_app.spec
    ```
@@ -111,6 +122,6 @@ Caso queira gerar um executável independente que não necessite do Python insta
 
 ---
 
-## Licença
+## 📄 Licença
 
 Este projeto está sob a licença **MIT** - consulte o arquivo [LICENSE](LICENSE) para obter detalhes.

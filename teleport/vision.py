@@ -9,7 +9,8 @@ import os
 from teleport import config
 from teleport.utils import ensure_model_exists
 from teleport.network import broadcast_message, send_file
-from teleport.gui import prompt_file_selection
+from teleport.clipboard import get_copied_files
+from teleport.overlay import trigger_grab_overlay, trigger_cancel_overlay
 
 # Índices dos landmarks da mão
 WRIST = 0
@@ -161,8 +162,18 @@ def vision_loop():
                 if is_fist and hand_was_open:
                     hand_was_open = False # Reseta a transição
                     if config.state["current_file"] is None:
-                        print("[GESTO] Punho fechado detectado após mão aberta! Abrindo seletor...")
-                        threading.Thread(target=prompt_file_selection, daemon=True).start()
+                        files = get_copied_files()
+                        if files:
+                            file_path = files[0]
+                            config.state["current_file"] = file_path
+                            config.state["current_file_name"] = os.path.basename(file_path)
+                            print(f"[GESTO] Arquivo '{config.state['current_file_name']}' AGARRADO DA ÁREA DE TRANSFERÊNCIA!")
+                            trigger_grab_overlay(file_path)
+                            broadcast_message(f"HOLDING:{config.local_ip}")
+                        else:
+                            print("[SISTEMA] Nenhuma cópia de arquivo ativa! Copie um arquivo primeiro (Ctrl+C).")
+                            trigger_cancel_overlay(title="Mão Vazia", status="Copie um arquivo (Ctrl+C) primeiro!")
+                            time.sleep(1.0)
                 
                 # 2. Fluxo de Cancelamento (PC de Origem)
                 if is_cancel:
@@ -172,7 +183,8 @@ def vision_loop():
                         config.state["current_file_name"] = None
                         broadcast_message("HOLDING:NONE")
                         hand_was_open = False
-                        time.sleep(1.0) # Delay para evitar detecções consecutivas
+                        trigger_cancel_overlay(title="Cancelado", status="Transferência de arquivo abortada.")
+                        time.sleep(1.5) # Delay para evitar detecções consecutivas
                 
                 # 3. Fluxo de Soltar/Receber Arquivo (PC de Destino)
                 if is_fist:

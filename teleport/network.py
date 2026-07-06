@@ -109,6 +109,9 @@ def tcp_file_receiver():
                     f.write(data)
             print(f"[REDE] Sucesso! Arquivo salvo como {save_path}")
             conn.close()
+            # Mostra o overlay de recebimento animado
+            from teleport.overlay import trigger_drop_overlay
+            trigger_drop_overlay(save_path)
         except socket.timeout:
             continue
         except Exception as e:
