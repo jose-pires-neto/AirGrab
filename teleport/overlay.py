@@ -53,18 +53,15 @@ def run_interactive_overlay():
     cx = sw // 2; cy = int(sh * 0.56)
     explorer_b = ExplorerBubble(cx, cy, br)
     
+    carousel_items = [explorer_b]
     n = len(history)
-    if n > 0:
-        orbit_radius = 210 + n * 8 
-        angle_step = (2 * math.pi) / n
-        start_angle = -math.pi / 2 
-        for i, path in enumerate(history):
-            b = Bubble(i, path, br)
-            ang = start_angle + i * angle_step
-            b.ox = cx + int(math.cos(ang) * orbit_radius)
-            b.oy = cy + int(math.sin(ang) * orbit_radius)
-            b.x = b.ox; b.y = b.oy
-            bubbles.append(b)
+    for i, path in enumerate(history):
+        b = Bubble(i + 1, path, br)
+        carousel_items.append(b)
+        bubbles.append(b)
+        
+    num_items = len(carousel_items)
+    carousel_current_index = 0.0
 
     particles = []
     ripples = [WaterRipple(sw//2, sh//2, max_radius=max(sw,sh), speed=30, color=(0,180,255))]
@@ -121,48 +118,53 @@ def run_interactive_overlay():
         draw_hud_header(asurf, sw, sh, fmain, fsub, popping=popping)
 
         if not popping and not closing:
-            explorer_b.is_hovered = False
-            for b in bubbles: b.is_hovered = False
-            closest = None
-            min_d = float("inf")
-            
-            d_exp = math.hypot(hand_x - explorer_b.x, hand_y - explorer_b.y)
-            if d_exp < 175:
-                min_d = d_exp; closest = explorer_b
-                
-            for b in bubbles:
-                d = math.hypot(hand_x - b.x, hand_y - b.y)
-                if d < 175 and d < min_d:
-                    min_d = d; closest = b
-                    
-            if closest:
-                closest.is_hovered = True
-                ang = math.atan2(hand_y - closest.y, hand_x - closest.x)
-                if closest == explorer_b:
-                    closest.x = cx + int(math.cos(ang) * 12)
-                    closest.y = cy + int(math.sin(ang) * 12)
-                else:
-                    closest.x += int(math.cos(ang) * 3.5)
-                    closest.y += int(math.sin(ang) * 3.5)
-                    
-                if pinch:
-                    if closest == explorer_b:
-                        explorer_b.is_popped = True
-                        popping = True
-                        trigger_dialog_file = True
-                        for b in bubbles:
-                            for _ in range(15): particles.append(BubblePopParticle(b.x, b.y, (100, 210, 255)))
-                    else:
-                        sel = closest
-                        popping = True
-                        sel.is_popped = True
-                        for _ in range(24): particles.append(BubblePopParticle(explorer_b.x, explorer_b.y, (100, 210, 255)))
-                        for b in bubbles:
-                            if b != sel:
-                                for _ in range(20): particles.append(BubblePopParticle(b.x, b.y, (100, 210, 255)))
+            # 1. Update Carousel Logic based on cam_x (hand position)
+            if num_items > 1:
+                # normalize cam_x to [0, 1] then map to [0, num_items - 1]
+                # invert direction if it feels backward. Usually cam_x=0 means hand is on left
+                norm_x = min(max(cam_x / sw, 0.0), 1.0)
+                target_index = norm_x * (num_items - 1)
+                carousel_current_index += (target_index - carousel_current_index) * 0.15
             else:
-                explorer_b.x = int(explorer_b.x * 0.8 + cx * 0.2)
-                explorer_b.y = int(explorer_b.y * 0.8 + cy * 0.2)
+                carousel_current_index = 0.0
+            
+            focused_idx = round(carousel_current_index)
+            if focused_idx < 0: focused_idx = 0
+            if focused_idx >= num_items: focused_idx = num_items - 1
+            
+            closest = carousel_items[focused_idx]
+            
+            # Position all items based on distance to current_index
+            spacing = 260
+            for i, item in enumerate(carousel_items):
+                d_index = i - carousel_current_index
+                target_x = cx + int(d_index * spacing)
+                target_y = cy
+                
+                if item == explorer_b:
+                    item.x = target_x
+                    item.y = target_y
+                else:
+                    item.ox = target_x
+                    item.oy = target_y
+                
+                item.is_hovered = (i == focused_idx)
+            
+            # 2. Check for Selection (Pinch)
+            if pinch:
+                if closest == explorer_b:
+                    explorer_b.is_popped = True
+                    popping = True
+                    trigger_dialog_file = True
+                    for _ in range(15): particles.append(BubblePopParticle(explorer_b.x, explorer_b.y, (100, 210, 255)))
+                else:
+                    sel = closest
+                    popping = True
+                    sel.is_popped = True
+                    for _ in range(24): particles.append(BubblePopParticle(explorer_b.x, explorer_b.y, (100, 210, 255)))
+                    for b in bubbles:
+                        if b != sel:
+                            for _ in range(20): particles.append(BubblePopParticle(b.x, b.y, (100, 210, 255)))
 
         if not popping or trigger_dialog_file:
             explorer_b.update()
@@ -201,11 +203,12 @@ def run_interactive_overlay():
             draw_outlined(asurf, "Selecione o botao central para escolher um arquivo do computador", finfo, cx, cy - 100, SUBTEXT_COLOR)
 
         if cam_x > 0 and not closing:
-            ro = 9 if pinch else 15
-            cc = GLOW_GRAB if pinch else GLOW_HOVER
-            pygame.draw.circle(asurf,cc,(hand_x,hand_y),ro+9,1)
-            pygame.draw.circle(asurf,cc,(hand_x,hand_y),ro,2)
-            pygame.draw.circle(asurf,cc,(hand_x,hand_y),3)
+            # Draw a very subtle reticle in the center of the screen instead of a floating cursor
+            ro = 45 if pinch else 60
+            cc = GLOW_GRAB if pinch else (255, 255, 255, 50)
+            pygame.draw.circle(asurf, cc, (cx, cy), ro, 1)
+            if pinch:
+                pygame.draw.circle(asurf, cc, (cx, cy), ro + 10, 2)
 
         if closing and (time.time() - close_t > 0.65): running = False
 
