@@ -6,8 +6,8 @@ color 0B
 :: =========================================================
 :: CONFIGURACOES DO SEU GITHUB (EDITE AQUI ANTES DE POSTAR)
 :: =========================================================
-set GITHUB_ZIP_URL=https://github.com/SEU_USUARIO/SEU_REPOSITORIO/archive/refs/heads/master.zip
-set FOLDER_NAME_IN_ZIP=SEU_REPOSITORIO-master
+set GITHUB_ZIP_URL=https://github.com/jose-pires-neto/AirGrab/archive/refs/heads/main.zip
+set FOLDER_NAME_IN_ZIP=AirGrab-main
 :: =========================================================
 
 set INSTALL_DIR=%USERPROFILE%\AirGrab
