@@ -36,6 +36,9 @@ last_status_text = ""
 latest_frame_lock = threading.Lock()
 latest_landmarks = None
 
+last_valid_wrist_pos = None
+last_valid_time = 0
+
 # Kalman Filter instance
 kalman = KalmanFilter2D(process_variance=2e-4, measurement_variance=0.03)
 
@@ -89,6 +92,7 @@ def get_screen_resolution():
 
 def vision_callback(result: vision.HandLandmarkerResult, output_image: mp.Image, timestamp_ms: int):
     global hand_was_open, hand_was_fist, last_gesture_text, last_status_text, latest_landmarks
+    global last_valid_wrist_pos, last_valid_time
     
     if not config.app_state.get("camera_enabled"):
         return
@@ -106,6 +110,22 @@ def vision_callback(result: vision.HandLandmarkerResult, output_image: mp.Image,
             palm_size = math.hypot(p9.x - p0.x, p9.y - p0.y)
             if palm_size < 0.06:
                 return # Mão muito pequena/longe, ignora completamente.
+            
+            # Anti-Teletransporte Espacial (Ignora saltos irreais de mão)
+            current_time = time.time()
+            if last_valid_wrist_pos is not None:
+                dx = p0.x - last_valid_wrist_pos[0]
+                dy = p0.y - last_valid_wrist_pos[1]
+                dist = math.hypot(dx, dy)
+                dt = current_time - last_valid_time
+                
+                # Se pulou mais de 35% da tela em menos de 0.5s, ignora (foi para outra pessoa)
+                if dt < 0.5 and dist > 0.35:
+                    return
+            
+            # Atualiza a posição e tempo da mão real do usuário
+            last_valid_wrist_pos = (p0.x, p0.y)
+            last_valid_time = current_time
             
             is_fist, is_open, is_cancel = check_hand_pose(hand_landmarks)
             
@@ -176,6 +196,7 @@ def vision_callback(result: vision.HandLandmarkerResult, output_image: mp.Image,
             hand_was_open = False
             hand_was_fist = False
             latest_landmarks = None
+            last_valid_wrist_pos = None
 
 def vision_loop():
     model_file = ensure_model_exists()
@@ -185,6 +206,9 @@ def vision_loop():
         base_options=base_options,
         running_mode=vision.RunningMode.LIVE_STREAM,
         num_hands=1,
+        min_hand_detection_confidence=0.75,
+        min_hand_presence_confidence=0.75,
+        min_tracking_confidence=0.75,
         result_callback=vision_callback
     )
     detector = vision.HandLandmarker.create_from_options(options)
