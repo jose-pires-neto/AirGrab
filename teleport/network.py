@@ -139,23 +139,21 @@ def udp_broadcast_sender():
     while config.app_state.get("running"):
         if config.app_state.get("sharing_enabled"):
             try:
-                sock.sendto(b"TELEPORT_HELLO", ("<broadcast>", config.UDP_PORT))
+                if config.app_state.get("current_file"):
+                    sock.sendto(f"HOLDING:{config.local_ip}".encode('utf-8'), ("<broadcast>", config.UDP_PORT))
+                else:
+                    sock.sendto(b"TELEPORT_HELLO", ("<broadcast>", config.UDP_PORT))
             except:
                 pass
-        time.sleep(3) 
+        time.sleep(1.5) 
 
 def tcp_file_receiver():
-    """Servidor TCP (com TLS opcional) que fica aguardando arquivos sendo jogados para cá."""
+    """Servidor TCP que fica aguardando arquivos sendo jogados para cá."""
     sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     sock.bind(("", config.TCP_PORT))
     sock.listen(5)
     
-    ctx = None
-    try:
-        ctx = _get_ssl_context(server_side=True)
-        print(f"[REDE] Aguardando arquivos em {config.local_ip}:{config.TCP_PORT} (Seguro com TLS)...")
-    except Exception as e:
-        print(f"[REDE] Aviso: TLS não inicializado ({e}). Aguardando arquivos sem criptografia.")
+    print(f"[REDE] Aguardando arquivos em {config.local_ip}:{config.TCP_PORT}...")
     
     while config.app_state.get("running"):
         sock.settimeout(2.0)
@@ -169,14 +167,7 @@ def tcp_file_receiver():
         def handle_client(c, a):
             try:
                 secure_conn = c
-                if ctx is not None:
-                    try:
-                        secure_conn = ctx.wrap_socket(c, server_side=True)
-                        print(f"[REDE] Conexão segura estabelecida com {a[0]}...")
-                    except Exception as ssl_err:
-                        print(f"[REDE] Erro SSL, caindo para conexão padrão: {ssl_err}")
-                else:
-                    print(f"[REDE] Conexão estabelecida com {a[0]}...")
+                print(f"[REDE] Conexão estabelecida com {a[0]}...")
                 
                 # Leitura do cabeçalho estruturado JSON
                 raw_len = secure_conn.recv(4)
@@ -240,11 +231,7 @@ def send_file(ip_target, file_path):
         sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         sock.connect((ip_target, config.TCP_PORT))
         
-        ctx = _get_ssl_context(server_side=False)
-        try:
-            secure_sock = ctx.wrap_socket(sock)
-        except Exception:
-            secure_sock = sock
+        secure_sock = sock
             
         # Prepara cabeçalho
         header = json.dumps({"filename": file_name, "size": file_size}).encode('utf-8')
