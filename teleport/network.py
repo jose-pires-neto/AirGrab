@@ -6,6 +6,7 @@ import ssl
 import json
 import struct
 import tempfile
+import sys
 from teleport import config
 
 # Certificado dummy hardcoded apenas para ativar criptografia TLS (ECDHE)
@@ -190,7 +191,11 @@ def tcp_file_receiver():
                 file_name = header_data.get("filename", "recebido_desconhecido.bin")
                 file_size = header_data.get("size", 0)
                 
-                save_path = f"RECEBIDO_{file_name}"
+                downloads_folder = os.path.join(os.path.expanduser("~"), "Downloads")
+                if not os.path.exists(downloads_folder):
+                    os.makedirs(downloads_folder)
+                    
+                save_path = os.path.join(downloads_folder, file_name)
                 bytes_received = 0
                 
                 with open(save_path, 'wb') as f:
@@ -203,6 +208,15 @@ def tcp_file_receiver():
                         
                 print(f"[REDE] Sucesso! Arquivo salvo como {save_path}")
                 secure_conn.close()
+                
+                # Abre a pasta do arquivo
+                import platform, subprocess
+                if sys.platform == "win32":
+                    os.startfile(downloads_folder)
+                elif sys.platform == "darwin":
+                    subprocess.Popen(["open", downloads_folder])
+                else:
+                    subprocess.Popen(["xdg-open", downloads_folder])
                 
                 # Mostra o overlay
                 from teleport.overlay import trigger_drop_overlay
@@ -223,7 +237,7 @@ def send_file(ip_target, file_path):
     file_size = os.path.getsize(file_path)
     
     try:
-        sock = socket.socket(socket.AF_INET, socket.STREAM)
+        sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         sock.connect((ip_target, config.TCP_PORT))
         
         ctx = _get_ssl_context(server_side=False)

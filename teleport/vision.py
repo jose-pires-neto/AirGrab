@@ -131,7 +131,7 @@ def vision_callback(result: vision.HandLandmarkerResult, output_image: mp.Image,
             if is_open: hand_was_open = True
             if is_fist and hand_was_open:
                 hand_was_open = False
-                if not config.app_state.get("is_overlay_active") and not config.app_state.get("current_file"):
+                if not config.app_state.get("is_overlay_active") and not config.app_state.get("current_file") and not config.network_holder_ip:
                     print("[GESTO] Punho fechado detectado após mão aberta! Abrindo HUD de tela cheia...")
                     trigger_interactive_hud()
             
