@@ -17,7 +17,7 @@ network_holder_ip = None
 app_state = StateManager({
     "camera_enabled": True,
     "sharing_enabled": True,
-    "debug_mode": True,  # Abre a janela da câmera para ver o que está acontecendo
+    "debug_mode": False,  # Abre a janela da câmera para ver o que está acontecendo
     "running": True,
     "current_file": None,
     "current_file_name": None,
