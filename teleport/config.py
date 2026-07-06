@@ -19,7 +19,15 @@ state = {
     "running": True,
     "current_file": None,
     "current_file_name": None,
-    "selecting_file": False
+    "selecting_file": False,
+    # Variáveis adicionadas para o AirGrab interativo
+    "clipboard_history": [],
+    "cursor_x": 0,
+    "cursor_y": 0,
+    "pinch_active": False,
+    "fist_active": False,
+    "is_overlay_active": False,
+    "cancel_requested": False
 }
 
 def force_exit(sig=None, frame=None):

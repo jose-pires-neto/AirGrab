@@ -2,7 +2,9 @@ import sys
 import os
 import ctypes
 import subprocess
+import time
 from urllib.parse import unquote
+from teleport import config
 
 # Configuração da API do Windows para ler arquivos (CF_HDROP)
 CF_HDROP = 15
@@ -82,3 +84,25 @@ def get_copied_files():
             pass
 
     return files
+
+def clipboard_history_tracker():
+    """Rastreador executado em background para manter um histórico dos últimos 5 caminhos de arquivos copiados."""
+    last_detected = None
+    print("[SISTEMA] Rastreador de histórico da área de transferência ativo.")
+    while config.state["running"]:
+        try:
+            files = get_copied_files()
+            if files:
+                new_file = files[0]
+                if new_file != last_detected:
+                    last_detected = new_file
+                    history = config.state["clipboard_history"]
+                    
+                    # Remove ocorrência anterior do mesmo arquivo para movê-lo ao topo
+                    history = [h for h in history if h != new_file]
+                    history.insert(0, new_file)
+                    config.state["clipboard_history"] = history[:5]
+                    print(f"[CLIPBOARD] Histórico atualizado. Topo: '{os.path.basename(new_file)}'")
+        except Exception as e:
+            pass
+        time.sleep(0.5)

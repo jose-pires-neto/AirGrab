@@ -6,11 +6,13 @@ import math
 import time
 import threading
 import os
+import sys
+import ctypes
 from teleport import config
 from teleport.utils import ensure_model_exists
 from teleport.network import broadcast_message, send_file
 from teleport.clipboard import get_copied_files
-from teleport.overlay import trigger_grab_overlay, trigger_cancel_overlay
+from teleport.overlay import trigger_grab_overlay, trigger_cancel_overlay, trigger_interactive_hud
 
 # Índices dos landmarks da mão
 WRIST = 0
@@ -76,6 +78,25 @@ def check_hand_pose(hand_landmarks):
     
     return is_fist, is_open, is_cancel
 
+def get_screen_resolution():
+    """Descobre a resolução nativa da tela de forma multiplataforma."""
+    if sys.platform == "win32":
+        try:
+            user32 = ctypes.windll.user32
+            user32.SetProcessDPIAware()
+            return user32.GetSystemMetrics(0), user32.GetSystemMetrics(1)
+        except:
+            pass
+    try:
+        import tkinter as tk
+        root = tk.Tk()
+        sw = root.winfo_screenwidth()
+        sh = root.winfo_screenheight()
+        root.destroy()
+        return sw, sh
+    except:
+        return 1920, 1080
+
 def vision_loop():
     """Thread principal da câmera para processar os gestos."""
     model_file = ensure_model_exists()
@@ -95,7 +116,11 @@ def vision_loop():
     hand_was_open = False
     hand_was_fist = False
     
-    print("[IA] Câmera iniciada. Abra a mão e feche o punho para agarrar um arquivo!")
+    # Coordenadas suavizadas do cursor
+    hand_x, hand_y = 0, 0
+    screen_width, screen_height = get_screen_resolution()
+    print(f"[IA] Resolução da tela detectada: {screen_width}x{screen_height}")
+    print("[IA] Câmera iniciada. Abra a mão e feche o punho para ver a área de transferência flutuante!")
 
     while config.state["running"]:
         if not config.state["camera_enabled"]:
@@ -144,7 +169,7 @@ def vision_loop():
                         cx, cy = int(lm.x * w), int(lm.y * h)
                         cv2.circle(frame, (cx, cy), 5, (0, 0, 255), -1)
                 
-                # Identifica pose do gesto
+                # 1. Identifica pose do gesto
                 is_fist, is_open, is_cancel = check_hand_pose(hand_landmarks)
                 
                 # Define texto para renderização no modo debug
@@ -155,29 +180,51 @@ def vision_loop():
                 elif is_cancel:
                     gesture_text = "CANCELAR (V)"
                 
-                # 1. Fluxo de Agarrar Arquivo (PC de Origem)
+                # 2. Rastreamento e Mapeamento de Coordenadas
+                index_tip = hand_landmarks[INDEX_FINGER_TIP]
+                # Caixa de calibração reduzida [0.2, 0.8] para alcançar cantos facilmente
+                x_mapped = (index_tip.x - 0.2) / 0.6 * screen_width
+                y_mapped = (index_tip.y - 0.2) / 0.6 * screen_height
+                # Limita às bordas da tela
+                x_mapped = max(0, min(screen_width, x_mapped))
+                y_mapped = max(0, min(screen_height, y_mapped))
+                
+                # Aplica média móvel exponencial para amortecer tremores
+                if hand_x == 0 and hand_y == 0:
+                    hand_x, hand_y = x_mapped, y_mapped
+                else:
+                    hand_x = hand_x * 0.55 + x_mapped * 0.45
+                    hand_y = hand_y * 0.55 + y_mapped * 0.45
+                    
+                config.state["cursor_x"] = int(hand_x)
+                config.state["cursor_y"] = int(hand_y)
+                
+                # 3. Detecção do Gesto de Pinça (Pinch) para Clique
+                p0 = hand_landmarks[WRIST]
+                p9 = hand_landmarks[9]
+                palm_size = math.hypot(p9.x - p0.x, p9.y - p0.y)
+                if palm_size == 0:
+                    palm_size = 0.001
+                pinch_ratio = math.hypot(hand_landmarks[4].x - hand_landmarks[8].x, hand_landmarks[4].y - hand_landmarks[8].y) / palm_size
+                config.state["pinch_active"] = (pinch_ratio < 0.25)
+                config.state["fist_active"] = is_fist
+                
+                # 4. Fluxo de Agarrar / Abrir Overlay (PC de Origem)
                 if is_open:
                     hand_was_open = True
                     
                 if is_fist and hand_was_open:
                     hand_was_open = False # Reseta a transição
-                    if config.state["current_file"] is None:
-                        files = get_copied_files()
-                        if files:
-                            file_path = files[0]
-                            config.state["current_file"] = file_path
-                            config.state["current_file_name"] = os.path.basename(file_path)
-                            print(f"[GESTO] Arquivo '{config.state['current_file_name']}' AGARRADO DA ÁREA DE TRANSFERÊNCIA!")
-                            trigger_grab_overlay(file_path)
-                            broadcast_message(f"HOLDING:{config.local_ip}")
-                        else:
-                            print("[SISTEMA] Nenhuma cópia de arquivo ativa! Copie um arquivo primeiro (Ctrl+C).")
-                            trigger_cancel_overlay(title="Mão Vazia", status="Copie um arquivo (Ctrl+C) primeiro!")
-                            time.sleep(1.0)
+                    if not config.state["is_overlay_active"]:
+                        print("[GESTO] Punho fechado detectado após mão aberta! Abrindo HUD de tela cheia...")
+                        trigger_interactive_hud()
                 
-                # 2. Fluxo de Cancelamento (PC de Origem)
                 if is_cancel:
-                    if config.state["current_file"] is not None:
+                    if config.state["is_overlay_active"]:
+                        # Sinaliza para o overlay iniciar animação de fecho com ondas vermelhas
+                        config.state["cancel_requested"] = True
+                    elif config.state["current_file"] is not None:
+                        # Se estiver fechado mas tiver arquivo carregado, limpa
                         print(f"[GESTO] Cancelamento detectado! Soltando arquivo '{config.state['current_file_name']}'...")
                         config.state["current_file"] = None
                         config.state["current_file_name"] = None
@@ -186,17 +233,18 @@ def vision_loop():
                         trigger_cancel_overlay(title="Cancelado", status="Transferência de arquivo abortada.")
                         time.sleep(1.5) # Delay para evitar detecções consecutivas
                 
-                # 3. Fluxo de Soltar/Receber Arquivo (PC de Destino)
+                # 6. Fluxo de Soltar/Receber Arquivo (PC de Destino)
                 if is_fist:
                     hand_was_fist = True
                     
                 if is_open and hand_was_fist:
                     hand_was_fist = False # Reseta a transição
                     if config.network_holder_ip and config.network_holder_ip != config.local_ip:
-                        print(f"[GESTO] Mão aberta detectada após punho fechado! Resgatando do PC {config.network_holder_ip}...")
-                        broadcast_message(f"GIVE_ME:{config.local_ip}")
-                        config.network_holder_ip = None
-                        time.sleep(2.0)
+                        if not config.state["is_overlay_active"]:
+                            print(f"[GESTO] Mão aberta detectada após punho fechado! Resgatando do PC {config.network_holder_ip}...")
+                            broadcast_message(f"GIVE_ME:{config.local_ip}")
+                            config.network_holder_ip = None
+                            time.sleep(2.0)
                         
                 # Textos de status para desenhar no frame
                 if hand_was_open:
@@ -204,9 +252,14 @@ def vision_loop():
                 elif hand_was_fist:
                     status_text = "Pronto para abrir e soltar"
         else:
-            # Se nenhuma mão for detectada, reinicia as transições de pose locais
+            # Se nenhuma mão for detectada, limpa as posições e status
+            config.state["cursor_x"] = 0
+            config.state["cursor_y"] = 0
+            config.state["pinch_active"] = False
+            config.state["fist_active"] = False
             hand_was_open = False
             hand_was_fist = False
+            hand_x, hand_y = 0, 0
 
         # Mostra a janela se estiver no modo debug
         if config.state["debug_mode"]:
