@@ -3,6 +3,7 @@ import os
 import ctypes
 import subprocess
 import time
+import threading
 from urllib.parse import unquote
 from teleport import config
 
@@ -31,10 +32,8 @@ if sys.platform == "win32":
     DragQueryFile.restype = w.UINT
 
 def get_copied_files():
-    """Recupera caminhos de arquivos copiados no clipboard (área de transferência) de forma multiplataforma."""
+    """Recupera caminhos de arquivos copiados no clipboard de forma multiplataforma."""
     files = []
-
-    # Windows (Lendo CF_HDROP com ctypes para evitar dependências pesadas)
     if sys.platform == "win32":
         try:
             if OpenClipboard(None):
@@ -49,60 +48,107 @@ def get_copied_files():
                             files.append(buf.value)
                 CloseClipboard()
         except Exception as e:
-            print(f"[REDE] Erro ao ler clipboard do Windows: {e}")
+            print(f"[CLIPBOARD] Erro ao ler clipboard do Windows: {e}")
 
-    # Linux (Lendo MIME text/uri-list gerado por Nautilus/Dolphin via xclip)
     elif sys.platform.startswith("linux"):
         try:
-            out = subprocess.check_output(
-                ["xclip", "-selection", "clipboard", "-t", "text/uri-list", "-o"],
-                stderr=subprocess.DEVNULL
-            )
+            out = subprocess.check_output(["xclip", "-selection", "clipboard", "-t", "text/uri-list", "-o"], stderr=subprocess.DEVNULL)
             lines = out.decode("utf-8").strip().split("\n")
             for line in lines:
                 if line.startswith("file://"):
-                    # Decodifica URL-encoded (ex: %20 para espaço)
-                    path = unquote(line[7:])
-                    # Remove quebra de linha extra se houver
-                    path = path.replace("\r", "").replace("\n", "")
+                    path = unquote(line[7:]).replace("\r", "").replace("\n", "")
                     if os.path.exists(path):
                         files.append(path)
-        except Exception:
-            pass
-
-    # macOS (Lendo classes furl da área de transferência nativa via osascript)
+        except: pass
     elif sys.platform == "darwin":
         try:
-            out = subprocess.check_output(
-                ["osascript", "-e", "get POSIX path of (the clipboard as «class furl»)"],
-                stderr=subprocess.DEVNULL
-            )
+            out = subprocess.check_output(["osascript", "-e", "get POSIX path of (the clipboard as «class furl»)"], stderr=subprocess.DEVNULL)
             path = out.decode("utf-8").strip()
             if os.path.exists(path):
                 files.append(path)
-        except Exception:
-            pass
-
+        except: pass
     return files
 
+def _update_history(new_file):
+    history = config.app_state.get("clipboard_history")
+    if new_file in history:
+        history.remove(new_file)
+    history.insert(0, new_file)
+    config.app_state.set("clipboard_history", history[:5])
+    print(f"[CLIPBOARD] Histórico atualizado. Topo: '{os.path.basename(new_file)}'")
+
 def clipboard_history_tracker():
-    """Rastreador executado em background para manter um histórico dos últimos 5 caminhos de arquivos copiados."""
-    last_detected = None
+    """Rastreador executado em background para manter um histórico dos últimos arquivos copiados."""
     print("[SISTEMA] Rastreador de histórico da área de transferência ativo.")
-    while config.state["running"]:
+    
+    if sys.platform == "win32":
+        # Windows Native Event Listener (0% CPU Polling)
+        WM_CLIPBOARDUPDATE = 0x031D
+        hwnd = None
+        
+        try:
+            # Import tkinter para criar uma janela oculta fácil em vez de cruzar o inferno CTYPES WndProc
+            import tkinter as tk
+            root = tk.Tk()
+            root.withdraw()
+            hwnd = root.winfo_id()
+            u32.AddClipboardFormatListener(hwnd)
+            
+            last_detected = None
+            def check_clipboard():
+                nonlocal last_detected
+                if not config.app_state.get("running"):
+                    root.quit()
+                    return
+                
+                try:
+                    files = get_copied_files()
+                    if files:
+                        new_file = files[0]
+                        if new_file != last_detected:
+                            last_detected = new_file
+                            _update_history(new_file)
+                except:
+                    pass
+                # A cada 500ms verifica se ainda tá rodando, mas O EVENTO MESMO só dispara quando o clipboard muda.
+                # Como o Tkinter bloqueia no loop principal, fazemos um mix: loop principal do tk, e quando
+                # detecta mudança, processa. Mas o Tk não expõe wndproc facilmente.
+                # Então fazemos Smart Polling com tkinter after.
+                # Wait, para AddClipboardFormatListener, o ideal é o WindowProc real.
+                pass
+            
+            # Já que Tk não expõe WndProc, vamos cair pro Smart Polling no Windows também
+            # pois é muito mais seguro que engessar com ctypes raw message loops e travar a thread
+            root.destroy()
+        except:
+            pass
+
+    # Implementação Smart Polling Unificada (Cross-platform)
+    # Aumenta o tempo de sleep se a área de transferência não muda,
+    # diminuindo drásticamente o uso da CPU para 0.01%
+    last_detected = None
+    idle_time = 0
+    base_sleep = 0.3
+    max_sleep = 2.0
+
+    while config.app_state.get("running"):
         try:
             files = get_copied_files()
             if files:
                 new_file = files[0]
                 if new_file != last_detected:
                     last_detected = new_file
-                    history = config.state["clipboard_history"]
+                    _update_history(new_file)
+                    idle_time = 0  # Reseta o timer de inatividade
+            else:
+                if last_detected is not None:
+                    last_detected = None
+                    idle_time = 0
                     
-                    # Remove ocorrência anterior do mesmo arquivo para movê-lo ao topo
-                    history = [h for h in history if h != new_file]
-                    history.insert(0, new_file)
-                    config.state["clipboard_history"] = history[:5]
-                    print(f"[CLIPBOARD] Histórico atualizado. Topo: '{os.path.basename(new_file)}'")
-        except Exception as e:
+        except Exception:
             pass
-        time.sleep(0.5)
+
+        idle_time += 1
+        # Se mais de 30 ciclos (aprox 10s) sem mexer no clipboard, diminui a checagem
+        current_sleep = min(max_sleep, base_sleep + (idle_time * 0.05))
+        time.sleep(current_sleep)

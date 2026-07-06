@@ -1,5 +1,6 @@
 import os
 import sys
+from teleport.state import StateManager
 
 # ==========================================
 # CONFIGURAÇÕES GERAIS E VARIÁVEIS DE ESTADO
@@ -12,7 +13,8 @@ peer_ip = None
 local_ip = None
 network_holder_ip = None
 
-state = {
+# Substituindo dicionário global pelo StateManager thread-safe
+app_state = StateManager({
     "camera_enabled": True,
     "sharing_enabled": True,
     "debug_mode": True,  # Abre a janela da câmera para ver o que está acontecendo
@@ -20,7 +22,6 @@ state = {
     "current_file": None,
     "current_file_name": None,
     "selecting_file": False,
-    # Variáveis adicionadas para o AirGrab interativo
     "clipboard_history": [],
     "cursor_x": 0,
     "cursor_y": 0,
@@ -28,12 +29,17 @@ state = {
     "fist_active": False,
     "is_overlay_active": False,
     "cancel_requested": False
-}
+})
+
+# Por conveniência, podemos expor o "state" para ser um atalho (como um proxy), 
+# mas o ideal é que todos passem a chamar app_state.get/set
+# Para retrocompatibilidade rápida, vamos redefinir 'state' como app_state._state não é o ideal,
+# Mas sim renomear os usos no código. Portanto, vamos remover o dict state exposto.
 
 def force_exit(sig=None, frame=None):
     """Fecha o aplicativo e encerra o processo imediatamente."""
     print("\n[SISTEMA] Sinal de encerramento recebido (Ctrl+C). Fechando aplicativo...")
-    state["running"] = False
+    app_state.set("running", False)
     try:
         if global_icon:
             global_icon.stop()

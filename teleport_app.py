@@ -30,7 +30,7 @@ if __name__ == "__main__":
     
     # Mantém a thread principal ativa e respondendo a sinais (como Ctrl+C e fechar janela)
     try:
-        while config.state["running"]:
+        while config.app_state.get("running"):
             time.sleep(0.5)
     except (KeyboardInterrupt, SystemExit):
         print("\n[SISTEMA] Encerramento solicitado...")
