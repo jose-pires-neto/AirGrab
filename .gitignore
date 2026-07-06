@@ -1,0 +1,43 @@
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+env/
+venv/
+.venv/
+pip-log.txt
+pip-delete-this-directory.txt
+.tox/
+.coverage
+.cache
+nosetests.xml
+coverage.xml
+*.cover
+.hypothesis/
+
+# PyInstaller
+# Keep teleport_app.spec as it contains the custom build configuration
+build/
+dist/
+
+# Application Specific
+hand_landmarker.task
+RECEBIDO_*
+
+# Environments
+.env
+.venv
+var/
+bin/
+include/
+lib/
+lib64/
+
+# IDEs and Editors
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
