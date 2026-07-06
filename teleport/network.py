@@ -212,6 +212,19 @@ def tcp_file_receiver():
                 # Mostra o overlay
                 from teleport.overlay import trigger_drop_overlay
                 trigger_drop_overlay(save_path)
+                
+                # Envia notificação nativa do Windows
+                try:
+                    from plyer import notification
+                    notification.notify(
+                        title="AirGrab: Arquivo Recebido!",
+                        message=f"{file_name} foi salvo com sucesso em {downloads_folder}",
+                        app_name="AirGrab",
+                        timeout=5
+                    )
+                except Exception as ne:
+                    print(f"[HUD] Falha ao enviar notificação nativa: {ne}")
+                    
             except Exception as e:
                 print(f"[REDE] Erro na recepção: {e}")
                 

@@ -15,7 +15,7 @@ network_holder_ip = None
 
 # Substituindo dicionário global pelo StateManager thread-safe
 app_state = StateManager({
-    "camera_enabled": True,
+    "camera_enabled": False,
     "sharing_enabled": True,
     "debug_mode": False,  # Abre a janela da câmera para ver o que está acontecendo
     "running": True,
@@ -28,18 +28,36 @@ app_state = StateManager({
     "pinch_active": False,
     "fist_active": False,
     "is_overlay_active": False,
-    "cancel_requested": False
+    "cancel_requested": False,
+    "shortcut": "ctrl+shift+a"
 })
 
-# Por conveniência, podemos expor o "state" para ser um atalho (como um proxy), 
-# mas o ideal é que todos passem a chamar app_state.get/set
-# Para retrocompatibilidade rápida, vamos redefinir 'state' como app_state._state não é o ideal,
-# Mas sim renomear os usos no código. Portanto, vamos remover o dict state exposto.
+def load_settings():
+    settings_file = os.path.join(os.path.dirname(__file__), "..", "settings.json")
+    if os.path.exists(settings_file):
+        try:
+            import json
+            with open(settings_file, "r") as f:
+                data = json.load(f)
+                if "shortcut" in data:
+                    app_state.set("shortcut", data["shortcut"])
+        except: pass
+
+def save_settings():
+    settings_file = os.path.join(os.path.dirname(__file__), "..", "settings.json")
+    try:
+        import json
+        with open(settings_file, "w") as f:
+            json.dump({"shortcut": app_state.get("shortcut")}, f)
+    except: pass
+
+load_settings()
 
 def force_exit(sig=None, frame=None):
     """Fecha o aplicativo e encerra o processo imediatamente."""
     print("\n[SISTEMA] Sinal de encerramento recebido (Ctrl+C). Fechando aplicativo...")
     app_state.set("running", False)
+    save_settings()
     try:
         if global_icon:
             global_icon.stop()

@@ -3,6 +3,7 @@ from teleport import config
 from teleport.network import broadcast_message
 from teleport.components.bubbles import Bubble, ExplorerBubble, WaterRipple, draw_hud_header, format_size, _load_thumbnail_base, _make_circular_thumb
 from teleport.components.particles import BubblePopParticle, GlowParticle
+from teleport.utils import ensure_sfx_exist
 
 COLOR_KEY     = (1, 1, 1)          
 TEXT_COLOR    = (255, 255, 255)
@@ -29,7 +30,14 @@ def open_file_explorer_dialog():
 
 def run_interactive_overlay():
     os.environ["SDL_VIDEO_CENTERED"] = "1"
-    pygame.init(); pygame.font.init()
+    pygame.init(); pygame.font.init(); pygame.mixer.init()
+    ensure_sfx_exist()
+    try:
+        sfx_pop = pygame.mixer.Sound('pop.wav')
+        sfx_swoosh = pygame.mixer.Sound('swoosh.wav')
+    except:
+        sfx_pop = sfx_swoosh = None
+
     info = pygame.display.Info()
     sw, sh = info.current_w, info.current_h
     if sw == 0 or sh == 0: sw, sh = 1920, 1080
@@ -44,6 +52,7 @@ def run_interactive_overlay():
         u32.SetWindowLongW(hwnd, -20, style | 0x80000)
         ck = (COLOR_KEY[2] << 16) | (COLOR_KEY[1] << 8) | COLOR_KEY[0]
         u32.SetLayeredWindowAttributes(hwnd, ck, 0, 1)
+        u32.SetWindowPos(hwnd, -1, 0, 0, 0, 0, 0x0001 | 0x0002)
 
     history = config.app_state.get("clipboard_history", [])
     has_history = len(history) > 0
@@ -152,6 +161,7 @@ def run_interactive_overlay():
             
             # 2. Check for Selection (Pinch)
             if pinch:
+                if sfx_pop: sfx_pop.play()
                 if closest == explorer_b:
                     explorer_b.is_popped = True
                     popping = True
@@ -178,6 +188,7 @@ def run_interactive_overlay():
             if not popping or b == sel:
                 b.update()
                 if popping and b == sel and b.scale >= 1.5 and not closing:
+                    if sfx_swoosh: sfx_swoosh.play()
                     for _ in range(45): particles.append(BubblePopParticle(b.x, b.y, GLOW_GRAB))
                     closing = True; close_t = time.time()
                     ripples.append(WaterRipple(b.x, b.y, max_radius=max(sw, sh), speed=32, color=GLOW_GRAB))
@@ -229,7 +240,16 @@ def run_interactive_overlay():
 
 def run_overlay_loop(mode, file_path=None, custom_title=None, custom_status=None):
     os.environ["SDL_VIDEO_CENTERED"] = "1"
-    pygame.init(); pygame.font.init()
+    pygame.init(); pygame.font.init(); pygame.mixer.init()
+    ensure_sfx_exist()
+    
+    if mode == "grab":
+        try: pygame.mixer.Sound('swoosh.wav').play()
+        except: pass
+    elif mode == "drop":
+        try: pygame.mixer.Sound('pop.wav').play()
+        except: pass
+
     w,h = 550,350
     GC=(0,255,128); DC=(0,191,255); CC=(255,69,58)
     if   mode=="grab": gc,tt,st=GC, custom_title or "AirGrabbed!",  custom_status or "Arquivo capturado"
@@ -242,6 +262,7 @@ def run_overlay_loop(mode, file_path=None, custom_title=None, custom_status=None
         u32=ctypes.windll.user32
         u32.SetWindowLongW(hwnd,-20,u32.GetWindowLongW(hwnd,-20)|0x80000)
         u32.SetLayeredWindowAttributes(hwnd,0xFF00FF,0,1)
+        u32.SetWindowPos(hwnd, -1, 0, 0, 0, 0, 0x0001 | 0x0002)
 
     try:
         ft=pygame.font.SysFont("Segoe UI",26,bold=True)

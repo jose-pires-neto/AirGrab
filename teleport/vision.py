@@ -101,6 +101,7 @@ def vision_callback(result: vision.HandLandmarkerResult, output_image: mp.Image,
     
     with latest_frame_lock:
         if result.hand_landmarks:
+            config.app_state.set("last_hand_time", time.time())
             latest_landmarks = result.hand_landmarks[0]
             hand_landmarks = result.hand_landmarks[0]
             
@@ -188,15 +189,17 @@ def vision_callback(result: vision.HandLandmarkerResult, output_image: mp.Image,
             elif hand_was_fist: last_status_text = "Pronto para abrir e soltar"
             else: last_status_text = ""
         else:
-            kalman.reset()
-            config.app_state.set("cursor_x", 0)
-            config.app_state.set("cursor_y", 0)
-            config.app_state.set("pinch_active", False)
-            config.app_state.set("fist_active", False)
-            hand_was_open = False
-            hand_was_fist = False
-            latest_landmarks = None
-            last_valid_wrist_pos = None
+            # Se não há mão por muito tempo (2s), reinicia o estado
+            if time.time() - config.app_state.get("last_hand_time", time.time()) > 2.0:
+                kalman.reset()
+                config.app_state.set("cursor_x", 0)
+                config.app_state.set("cursor_y", 0)
+                config.app_state.set("pinch_active", False)
+                config.app_state.set("fist_active", False)
+                last_gesture_text = ""
+                last_status_text = ""
+                latest_landmarks = None
+                last_valid_wrist_pos = None
 
 def vision_loop():
     model_file = ensure_model_exists()
@@ -221,6 +224,13 @@ def vision_loop():
     while config.app_state.get("running"):
         if not config.app_state.get("camera_enabled"):
             time.sleep(0.5)
+            if config.app_state.get("debug_mode"):
+                cv2.destroyAllWindows()
+            continue
+            
+        if time.time() - config.app_state.get("last_hand_time", time.time()) > 20.0:
+            print("[IA] Auto-Sleep: Câmera desligada por inatividade. Pressione o atalho para acordar.")
+            config.app_state.set("camera_enabled", False)
             if config.app_state.get("debug_mode"):
                 cv2.destroyAllWindows()
             continue

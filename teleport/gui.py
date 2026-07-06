@@ -6,6 +6,36 @@ from PIL import Image, ImageDraw
 import pystray
 from teleport import config
 from teleport.network import broadcast_message
+import keyboard
+from tkinter import simpledialog
+
+current_hotkey_hook = None
+
+def trigger_camera_from_shortcut():
+    print(f"[ATALHO] Câmera acionada pelo atalho {config.app_state.get('shortcut')}!")
+    config.app_state.set("camera_enabled", True)
+    config.app_state.set("last_hand_time", __import__('time').time())
+
+def setup_hotkey():
+    global current_hotkey_hook
+    if current_hotkey_hook:
+        try: keyboard.remove_hotkey(current_hotkey_hook)
+        except: pass
+    try:
+        current_hotkey_hook = keyboard.add_hotkey(config.app_state.get("shortcut"), trigger_camera_from_shortcut)
+    except Exception as e:
+        print(f"[SISTEMA] Erro ao registrar atalho: {e}")
+
+def change_shortcut(icon, item):
+    root = tk.Tk()
+    root.withdraw()
+    root.attributes('-topmost', True)
+    new_shortcut = simpledialog.askstring("Alterar Atalho AirGrab", "Digite o novo atalho (ex: ctrl+shift+a, alt+z):", initialvalue=config.app_state.get("shortcut"))
+    root.destroy()
+    if new_shortcut:
+        config.app_state.set("shortcut", new_shortcut.lower())
+        config.save_settings()
+        setup_hotkey()
 
 def create_image():
     """Gera um ícone verde simples (uma bolinha) para a barra de tarefas."""
@@ -68,8 +98,10 @@ def setup_tray():
         pystray.MenuItem(lambda text: f"Soltar Arquivo ({config.app_state.get("current_file_name")})" if config.app_state.get("current_file") else "Mão Vazia", clear_current_file, enabled=lambda item: config.app_state.get("current_file") is not None),
         pystray.MenuItem(lambda text: "Câmera: LIGADA" if config.app_state.get("camera_enabled") else "Câmera: DESLIGADA", toggle_camera),
         pystray.MenuItem(lambda text: "Compartilhamento: ON" if config.app_state.get("sharing_enabled") else "Compartilhamento: OFF", toggle_sharing),
+        pystray.MenuItem(lambda text: f"Alterar Atalho ({config.app_state.get('shortcut')})", change_shortcut),
         pystray.MenuItem(lambda text: "Modo Visual (Debug): ON" if config.app_state.get("debug_mode") else "Modo Visual (Debug): OFF", toggle_debug),
         pystray.MenuItem("Sair", exit_app)
     )
+    setup_hotkey()
     config.global_icon = pystray.Icon("teleport", create_image(), "AI Teleport", menu)
     config.global_icon.run()
