@@ -100,6 +100,13 @@ def vision_callback(result: vision.HandLandmarkerResult, output_image: mp.Image,
             latest_landmarks = result.hand_landmarks[0]
             hand_landmarks = result.hand_landmarks[0]
             
+            # Filtro Corporativo de Proximidade (Ignora pessoas no fundo da sala)
+            p0 = hand_landmarks[WRIST]
+            p9 = hand_landmarks[9]
+            palm_size = math.hypot(p9.x - p0.x, p9.y - p0.y)
+            if palm_size < 0.06:
+                return # Mão muito pequena/longe, ignora completamente.
+            
             is_fist, is_open, is_cancel = check_hand_pose(hand_landmarks)
             
             if is_fist: last_gesture_text = "PUNHO FECHADO"
@@ -120,10 +127,7 @@ def vision_callback(result: vision.HandLandmarkerResult, output_image: mp.Image,
             config.app_state.set("cursor_y", ky)
             
             # Gesto Pinça
-            p0 = hand_landmarks[WRIST]
-            p9 = hand_landmarks[9]
-            palm_size = math.hypot(p9.x - p0.x, p9.y - p0.y) or 0.001
-            pinch_ratio = math.hypot(hand_landmarks[4].x - hand_landmarks[8].x, hand_landmarks[4].y - hand_landmarks[8].y) / palm_size
+            pinch_ratio = math.hypot(hand_landmarks[4].x - hand_landmarks[8].x, hand_landmarks[4].y - hand_landmarks[8].y) / (palm_size or 0.001)
             config.app_state.set("pinch_active", (pinch_ratio < 0.25))
             config.app_state.set("fist_active", is_fist)
             
