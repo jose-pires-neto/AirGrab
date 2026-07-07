@@ -38,6 +38,7 @@ latest_landmarks = None
 
 last_valid_wrist_pos = None
 last_valid_time = 0
+last_action_time = 0
 
 # Kalman Filter instance
 kalman = KalmanFilter2D(process_variance=2e-4, measurement_variance=0.03)
@@ -92,7 +93,7 @@ def get_screen_resolution():
 
 def vision_callback(result: vision.HandLandmarkerResult, output_image: mp.Image, timestamp_ms: int):
     global hand_was_open, hand_was_fist, last_gesture_text, last_status_text, latest_landmarks
-    global last_valid_wrist_pos, last_valid_time
+    global last_valid_wrist_pos, last_valid_time, last_action_time
     
     if not config.app_state.get("camera_enabled"):
         return
@@ -165,14 +166,15 @@ def vision_callback(result: vision.HandLandmarkerResult, output_image: mp.Image,
                 if config.app_state.get("is_overlay_active"):
                     config.app_state.set("cancel_requested", True)
                 elif config.app_state.get("current_file") is not None:
-                    fname = config.app_state.get("current_file_name")
-                    print(f"[GESTO] Cancelamento detectado! Soltando arquivo '{fname}'...")
-                    config.app_state.set("current_file", None)
-                    config.app_state.set("current_file_name", None)
-                    broadcast_message("HOLDING:NONE")
-                    hand_was_open = False
-                    trigger_cancel_overlay(title="Cancelado", status="Transferência de arquivo abortada.")
-                    time.sleep(1.5)
+                    if current_time - last_action_time > 1.5:
+                        fname = config.app_state.get("current_file_name")
+                        print(f"[GESTO] Cancelamento detectado! Soltando arquivo '{fname}'...")
+                        config.app_state.set("current_file", None)
+                        config.app_state.set("current_file_name", None)
+                        broadcast_message("HOLDING:NONE")
+                        hand_was_open = False
+                        trigger_cancel_overlay(title="Cancelado", status="Transferência de arquivo abortada.")
+                        last_action_time = current_time
             
             # Fluxo Soltar (Receber)
             if is_fist: hand_was_fist = True
@@ -180,10 +182,11 @@ def vision_callback(result: vision.HandLandmarkerResult, output_image: mp.Image,
                 hand_was_fist = False
                 if config.network_holder_ip and config.network_holder_ip != config.local_ip:
                     if not config.app_state.get("is_overlay_active"):
-                        print(f"[GESTO] Mão aberta detectada após punho fechado! Resgatando do PC {config.network_holder_ip}...")
-                        broadcast_message(f"GIVE_ME:{config.local_ip}")
-                        config.network_holder_ip = None
-                        time.sleep(2.0)
+                        if current_time - last_action_time > 2.0:
+                            print(f"[GESTO] Mão aberta detectada após punho fechado! Resgatando do PC {config.network_holder_ip}...")
+                            broadcast_message(f"GIVE_ME:{config.local_ip}")
+                            config.network_holder_ip = None
+                            last_action_time = current_time
             
             if hand_was_open: last_status_text = "Pronto para fechar e agarrar"
             elif hand_was_fist: last_status_text = "Pronto para abrir e soltar"
@@ -214,20 +217,31 @@ def vision_loop():
         min_tracking_confidence=0.75,
         result_callback=vision_callback
     )
-    detector = vision.HandLandmarker.create_from_options(options)
-    cap = cv2.VideoCapture(0)
     
-    sw, sh = get_screen_resolution()
-    print(f"[IA] Resolução da tela detectada: {sw}x{sh}")
-    print("[IA] Câmera iniciada no modo LIVE_STREAM com Filtro de Kalman!")
+    detector = None
+    cap = None
 
     while config.app_state.get("running"):
         if not config.app_state.get("camera_enabled"):
+            if detector is not None:
+                detector.close()
+                detector = None
+            if cap is not None:
+                cap.release()
+                cap = None
             time.sleep(0.5)
             if config.app_state.get("debug_mode"):
                 cv2.destroyAllWindows()
             continue
             
+        if detector is None:
+            print("[IA] Inicializando recursos da câmera...")
+            detector = vision.HandLandmarker.create_from_options(options)
+            cap = cv2.VideoCapture(0)
+            sw, sh = get_screen_resolution()
+            print(f"[IA] Resolução da tela detectada: {sw}x{sh}")
+            print("[IA] Câmera iniciada no modo LIVE_STREAM com Filtro de Kalman!")
+
         if time.time() - config.app_state.get("last_hand_time", time.time()) > 20.0:
             print("[IA] Auto-Sleep: Câmera desligada por inatividade. Pressione o atalho para acordar.")
             config.app_state.set("camera_enabled", False)
@@ -281,6 +295,8 @@ def vision_loop():
         else:
             cv2.destroyAllWindows()
 
-    detector.close()
-    cap.release()
+    if detector is not None:
+        detector.close()
+    if cap is not None:
+        cap.release()
     cv2.destroyAllWindows()

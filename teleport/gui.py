@@ -12,9 +12,14 @@ from tkinter import simpledialog
 current_hotkey_hook = None
 
 def trigger_camera_from_shortcut():
-    print(f"[ATALHO] Câmera acionada pelo atalho {config.app_state.get('shortcut')}!")
-    config.app_state.set("camera_enabled", True)
-    config.app_state.set("last_hand_time", __import__('time').time())
+    current_state = config.app_state.get("camera_enabled")
+    if current_state:
+        print(f"[ATALHO] Câmera DESLIGADA pelo atalho {config.app_state.get('shortcut')}!")
+        config.app_state.set("camera_enabled", False)
+    else:
+        print(f"[ATALHO] Câmera LIGADA pelo atalho {config.app_state.get('shortcut')}!")
+        config.app_state.set("camera_enabled", True)
+        config.app_state.set("last_hand_time", __import__('time').time())
 
 def setup_hotkey():
     global current_hotkey_hook
