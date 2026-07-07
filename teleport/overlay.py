@@ -14,6 +14,18 @@ GLOW_WARN     = (255, 70, 55)
 
 def _rb(): return os.urandom(1)[0] / 255.0
 
+def force_topmost(hwnd):
+    if sys.platform == "win32":
+        u32 = ctypes.windll.user32
+        # HWND_TOPMOST = -1, SWP_NOSIZE = 1, SWP_NOMOVE = 2, SWP_SHOWWINDOW = 0x40
+        u32.SetWindowPos(hwnd, -1, 0, 0, 0, 0, 0x0001 | 0x0002 | 0x0040)
+        # Hack do ALT para forçar o foco no Windows a partir de um processo em background
+        u32.keybd_event(0x12, 0, 0, 0) # Pressiona ALT
+        u32.keybd_event(0x12, 0, 2, 0) # Solta ALT
+        u32.SetForegroundWindow(hwnd)
+        u32.BringWindowToTop(hwnd)
+
+
 def open_file_explorer_dialog():
     try:
         import tkinter as tk
@@ -52,7 +64,7 @@ def run_interactive_overlay():
         u32.SetWindowLongW(hwnd, -20, style | 0x80000)
         ck = (COLOR_KEY[2] << 16) | (COLOR_KEY[1] << 8) | COLOR_KEY[0]
         u32.SetLayeredWindowAttributes(hwnd, ck, 0, 1)
-        u32.SetWindowPos(hwnd, -1, 0, 0, 0, 0, 0x0001 | 0x0002)
+        force_topmost(hwnd)
 
     history = config.app_state.get("clipboard_history", [])
     has_history = len(history) > 0
@@ -262,7 +274,7 @@ def run_overlay_loop(mode, file_path=None, custom_title=None, custom_status=None
         u32=ctypes.windll.user32
         u32.SetWindowLongW(hwnd,-20,u32.GetWindowLongW(hwnd,-20)|0x80000)
         u32.SetLayeredWindowAttributes(hwnd,0xFF00FF,0,1)
-        u32.SetWindowPos(hwnd, -1, 0, 0, 0, 0, 0x0001 | 0x0002)
+        force_topmost(hwnd)
 
     try:
         ft=pygame.font.SysFont("Segoe UI",26,bold=True)
