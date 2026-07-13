@@ -85,14 +85,14 @@ def prompt_file_selection():
     if file_path:
         config.app_state.set("current_file", file_path)
         config.app_state.set("current_file_name", os.path.basename(file_path))
-        print(f"[GESTO] Arquivo '{config.app_state.get("current_file_name")}' AGARRADO!")
+        print(f"[GESTO] Arquivo '{config.app_state.get('current_file_name')}' AGARRADO!")
         broadcast_message(f"HOLDING:{config.local_ip}")
     else:
         print("[GESTO] Seleção cancelada. Mão vazia.")
 
 def clear_current_file(icon, item):
     if config.app_state.get("current_file"):
-        print(f"[SISTEMA] Arquivo '{config.app_state.get("current_file_name")}' liberado manualmente.")
+        print(f"[SISTEMA] Arquivo '{config.app_state.get('current_file_name')}' liberado manualmente.")
         config.app_state.set("current_file", None)
         config.app_state.set("current_file_name", None)
         broadcast_message("HOLDING:NONE")
