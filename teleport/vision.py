@@ -12,7 +12,7 @@ from teleport import config
 from teleport.utils import ensure_model_exists
 from teleport.network import broadcast_message, send_file
 from teleport.clipboard import get_copied_files
-from teleport.overlay import trigger_grab_overlay, trigger_cancel_overlay, trigger_interactive_hud
+from teleport.overlay import trigger_grab_overlay, trigger_cancel_overlay, trigger_interactive_hud, trigger_drop_overlay
 from teleport.kalman import KalmanFilter2D
 
 # Índices dos landmarks da mão
@@ -180,13 +180,55 @@ def vision_callback(result: vision.HandLandmarkerResult, output_image: mp.Image,
             if is_fist: hand_was_fist = True
             if is_open and hand_was_fist:
                 hand_was_fist = False
-                if config.network_holder_ip and config.network_holder_ip != config.local_ip:
-                    if not config.app_state.get("is_overlay_active"):
-                        if current_time - last_action_time > 2.0:
-                            print(f"[GESTO] Mão aberta detectada após punho fechado! Resgatando do PC {config.network_holder_ip}...")
-                            broadcast_message(f"GIVE_ME:{config.local_ip}")
-                            config.network_holder_ip = None
-                            last_action_time = current_time
+                if config.network_holder_ip:
+                    if config.network_holder_ip == "WEB_APP":
+                        if not config.app_state.get("is_overlay_active"):
+                            if current_time - last_action_time > 2.0:
+                                print(f"[GESTO] Mão aberta detectada! Puxando arquivo do Web App...")
+                                temp_path = config.app_state.get("web_app_file_ready")
+                                file_name = config.app_state.get("web_app_file_name")
+                                
+                                if temp_path and os.path.exists(temp_path):
+                                    import shutil
+                                    downloads_folder = os.path.join(os.path.expanduser("~"), "Downloads")
+                                    if not os.path.exists(downloads_folder):
+                                        os.makedirs(downloads_folder)
+                                        
+                                    save_path = os.path.join(downloads_folder, file_name)
+                                    shutil.move(temp_path, save_path)
+                                    print(f"[REDE] Sucesso! Arquivo do Web App salvo como {save_path}")
+                                    
+                                    if sys.platform == "win32":
+                                        os.startfile(downloads_folder)
+                                    elif sys.platform == "darwin":
+                                        import subprocess; subprocess.Popen(["open", downloads_folder])
+                                    else:
+                                        import subprocess; subprocess.Popen(["xdg-open", downloads_folder])
+                                    
+                                    trigger_drop_overlay(save_path)
+                                    
+                                    try:
+                                        from plyer import notification
+                                        notification.notify(
+                                            title="AirGrab Web: Arquivo Recebido!",
+                                            message=f"{file_name} foi salvo com sucesso em {downloads_folder}",
+                                            app_name="AirGrab",
+                                            timeout=5
+                                        )
+                                    except Exception as ne:
+                                        pass
+                                        
+                                config.app_state.set("web_app_file_ready", None)
+                                config.app_state.set("web_app_file_name", None)
+                                config.network_holder_ip = None
+                                last_action_time = current_time
+                    elif config.network_holder_ip != config.local_ip:
+                        if not config.app_state.get("is_overlay_active"):
+                            if current_time - last_action_time > 2.0:
+                                print(f"[GESTO] Mão aberta detectada após punho fechado! Resgatando do PC {config.network_holder_ip}...")
+                                broadcast_message(f"GIVE_ME:{config.local_ip}")
+                                config.network_holder_ip = None
+                                last_action_time = current_time
             
             if hand_was_open: last_status_text = "Pronto para fechar e agarrar"
             elif hand_was_fist: last_status_text = "Pronto para abrir e soltar"

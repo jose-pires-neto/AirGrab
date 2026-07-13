@@ -29,7 +29,9 @@ app_state = StateManager({
     "fist_active": False,
     "is_overlay_active": False,
     "cancel_requested": False,
-    "shortcut": "ctrl+shift+a"
+    "shortcut": "ctrl+shift+a",
+    "web_app_file_ready": None,
+    "web_app_file_name": None
 })
 
 def load_settings():

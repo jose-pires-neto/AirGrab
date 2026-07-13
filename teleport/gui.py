@@ -97,10 +97,13 @@ def clear_current_file(icon, item):
         config.app_state.set("current_file_name", None)
         broadcast_message("HOLDING:NONE")
 
+from teleport.overlay import trigger_qr_hologram
+
 def setup_tray():
     """Cria o menu acessível ao clicar com botão direito no ícone."""
     menu = pystray.Menu(
-        pystray.MenuItem(lambda text: f"Soltar Arquivo ({config.app_state.get("current_file_name")})" if config.app_state.get("current_file") else "Mão Vazia", clear_current_file, enabled=lambda item: config.app_state.get("current_file") is not None),
+        pystray.MenuItem(lambda text: f"Soltar Arquivo ({config.app_state.get('current_file_name')})" if config.app_state.get("current_file") else "Mão Vazia", clear_current_file, enabled=lambda item: config.app_state.get("current_file") is not None),
+        pystray.MenuItem("Conectar Celular (Holograma QR)", lambda icon, item: trigger_qr_hologram()),
         pystray.MenuItem(lambda text: "Câmera: LIGADA" if config.app_state.get("camera_enabled") else "Câmera: DESLIGADA", toggle_camera),
         pystray.MenuItem(lambda text: "Compartilhamento: ON" if config.app_state.get("sharing_enabled") else "Compartilhamento: OFF", toggle_sharing),
         pystray.MenuItem(lambda text: f"Alterar Atalho ({config.app_state.get('shortcut')})", change_shortcut),

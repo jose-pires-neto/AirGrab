@@ -1,0 +1,38 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>AirGrab Web</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div class="blob blob-1"></div>
+    <div class="blob blob-2"></div>
+    
+    <div class="glass-panel">
+        <h1 class="logo">AirGrab <span>Web</span></h1>
+        <p class="subtitle" id="connectionStatus">Conectado ao PC</p>
+        
+        <div class="upload-zone" id="uploadZone">
+            <input type="file" id="fileInput" class="hidden">
+            <div class="icon">✨</div>
+            <p>Toque para Selecionar Arquivo</p>
+        </div>
+
+        <div class="status-zone hidden" id="statusZone">
+            <div class="pulse-container">
+                <div class="pulse-ring"></div>
+                <div class="pulse-ring delay"></div>
+                <div class="icon-held">🖐️</div>
+            </div>
+            <p class="status-text">Mágica Pronta!</p>
+            <p class="status-sub">Abra a mão para a câmera do PC para puxar o arquivo.</p>
+            <button class="cancel-btn" id="cancelBtn">Cancelar</button>
+        </div>
+    </div>
+    
+    <script src="script.js"></script>
+</body>
+</html>

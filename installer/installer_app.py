@@ -117,12 +117,20 @@ class AirGrabInstaller(tk.Tk):
             self.btn_install.config(state=tk.NORMAL)
             
     def create_shortcuts(self):
-        desktop = Path.home() / "Desktop"
-        
-        if not desktop.exists():
-            desktop = Path.home() / "Área de Trabalho"
+        if self.system == "win32":
+            import winreg
+            try:
+                with winreg.OpenKey(winreg.HKEY_CURRENT_USER, r"Software\Microsoft\Windows\CurrentVersion\Explorer\Shell Folders") as key:
+                    desktop_path = winreg.QueryValueEx(key, "Desktop")[0]
+                    desktop = Path(desktop_path)
+            except Exception:
+                desktop = Path.home() / "Desktop"
+        else:
+            desktop = Path.home() / "Desktop"
             if not desktop.exists():
-                desktop = Path.home()
+                desktop = Path.home() / "Área de Trabalho"
+                if not desktop.exists():
+                    desktop = Path.home()
         
         if self.system == "win32":
             # Criar VBS para rodar invisível

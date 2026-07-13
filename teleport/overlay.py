@@ -4,6 +4,8 @@ from teleport.network import broadcast_message
 from teleport.components.bubbles import Bubble, ExplorerBubble, WaterRipple, draw_hud_header, format_size, _load_thumbnail_base, _make_circular_thumb
 from teleport.components.particles import BubblePopParticle, GlowParticle
 from teleport.utils import ensure_sfx_exist
+import qrcode
+from PIL import Image
 
 COLOR_KEY     = (1, 1, 1)          
 TEXT_COLOR    = (255, 255, 255)
@@ -353,3 +355,68 @@ def trigger_cancel_overlay(title=None, status=None): threading.Thread(target=run
 def trigger_interactive_hud():
     config.app_state.set("is_overlay_active", True)
     threading.Thread(target=run_interactive_overlay, daemon=True).start()
+
+def run_qr_hologram_loop():
+    os.environ["SDL_VIDEO_CENTERED"] = "1"
+    pygame.init(); pygame.font.init()
+    
+    url = f"http://{config.local_ip}:50002"
+    qr = qrcode.QRCode(version=1, box_size=8, border=4)
+    qr.add_data(url)
+    qr.make(fit=True)
+    pil_img = qr.make_image(fill_color="black", back_color="white").convert('RGB')
+    qr_surface = pygame.image.fromstring(pil_img.tobytes(), pil_img.size, pil_img.mode)
+    
+    w, h = pil_img.size[0] + 60, pil_img.size[1] + 120
+    screen = pygame.display.set_mode((w,h), pygame.NOFRAME)
+    
+    if sys.platform=="win32":
+        hwnd=pygame.display.get_wm_info()["window"]
+        u32=ctypes.windll.user32
+        u32.SetWindowLongW(hwnd,-20,u32.GetWindowLongW(hwnd,-20)|0x80000)
+        u32.SetLayeredWindowAttributes(hwnd,0xFF00FF,0,1)
+        force_topmost(hwnd)
+
+    try: ft=pygame.font.SysFont("Segoe UI",24,bold=True)
+    except: ft=pygame.font.Font(None,30)
+    try: fs=pygame.font.SysFont("Segoe UI",14)
+    except: fs=pygame.font.Font(None,18)
+
+    clock=pygame.time.Clock()
+    running=True
+    t0 = time.time()
+    
+    while running:
+        if time.time() - t0 > 30.0: running = False # Timeout 30s
+        if config.app_state.get("web_app_file_ready"): running = False # Fechar se recebeu arquivo
+        
+        for ev in pygame.event.get():
+            if ev.type==pygame.QUIT: running=False
+            elif ev.type==pygame.KEYDOWN and ev.key in (pygame.K_ESCAPE, pygame.K_SPACE, pygame.K_RETURN):
+                running=False
+
+        screen.fill((255,0,255) if sys.platform=="win32" else (15,15,18))
+        
+        cs = pygame.Surface((w,h), pygame.SRCALPHA)
+        pygame.draw.rect(cs,(14,18,34,240),(0,0,w,h),border_radius=20)
+        pygame.draw.rect(cs,(0, 235, 255, 255),(0,0,w,h),2,border_radius=20)
+        
+        screen.blit(cs,(0,0))
+        
+        text1 = ft.render("Conectar Celular", True, (255,255,255))
+        screen.blit(text1, ((w - text1.get_width())//2, 20))
+        
+        text2 = fs.render(url, True, (0, 235, 255))
+        screen.blit(text2, ((w - text2.get_width())//2, 50))
+        
+        screen.blit(qr_surface, (30, 80))
+        
+        text3 = fs.render("Escaneie para enviar arquivos", True, (180, 200, 225))
+        screen.blit(text3, ((w - text3.get_width())//2, h - 30))
+
+        pygame.display.flip(); clock.tick(30)
+        
+    pygame.display.quit(); pygame.quit()
+
+def trigger_qr_hologram():
+    threading.Thread(target=run_qr_hologram_loop, daemon=True).start()

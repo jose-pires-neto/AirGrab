@@ -6,6 +6,7 @@ from teleport.network import udp_broadcast_listener, udp_broadcast_sender, tcp_f
 from teleport.vision import vision_loop
 from teleport.gui import setup_tray
 from teleport.clipboard import clipboard_history_tracker
+from teleport.web_server import run_web_server
 
 # Registra os manipuladores de sinais para capturar Ctrl+C no terminal
 signal.signal(signal.SIGINT, config.force_exit)
@@ -23,6 +24,7 @@ if __name__ == "__main__":
     threading.Thread(target=udp_broadcast_sender, daemon=True).start()
     threading.Thread(target=tcp_file_receiver, daemon=True).start()
     threading.Thread(target=clipboard_history_tracker, daemon=True).start()
+    threading.Thread(target=run_web_server, daemon=True).start()
     threading.Thread(target=vision_loop, daemon=True).start()
     
     # Inicia a interface (pystray) em uma thread separada (daemon) para não travar a thread principal
